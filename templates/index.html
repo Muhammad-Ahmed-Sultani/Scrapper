@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Business Directory Scraper</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: #f4f6f8;
+      color: #222;
+      margin: 0;
+      padding: 40px 16px;
+    }
+    .card {
+      background: #fff;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 28px 32px;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    p.sub { margin: 0 0 20px; color: #666; font-size: 14px; }
+    label { display: block; font-weight: 600; margin: 14px 0 6px; font-size: 14px; }
+    input[type="text"] {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 15px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    .dir-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 16px;
+      margin-top: 4px;
+    }
+    .dir-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 14px;
+      padding: 6px 8px;
+      border: 1px solid #e3e8ee;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .dir-item input { margin-top: 3px; }
+    .opt-item { display: flex; gap: 8px; align-items: flex-start; margin: 14px 0 4px; }
+    .dir-item .note { display: block; color: #8a93a0; font-size: 11.5px; margin-top: 2px; }
+    button {
+      margin-top: 22px;
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      background: #2a7de1;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:hover { background: #1f66bd; }
+    button:disabled { background: #9bbce8; cursor: not-allowed; }
+    #status-area {
+      margin-top: 24px;
+      padding: 16px;
+      background: #f0f4f9;
+      border: 1px solid #dde6f0;
+      border-radius: 6px;
+      font-size: 14px;
+      display: none;
+    }
+    #status-area.visible { display: block; }
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid #b9d2f3;
+      border-top-color: #2a7de1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error { color: #b00020; }
+    table.summary {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 13px;
+    }
+    table.summary th, table.summary td {
+      text-align: left;
+      padding: 6px 8px;
+      border-bottom: 1px solid #e3e8ee;
+    }
+    table.summary th { background: #f6f8fb; font-size: 12px; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11.5px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .b-running  { background: #e4effd; color: #1f66bd; }
+    .b-ok       { background: #e2f6ea; color: #157347; }
+    .b-blocked  { background: #fdecea; color: #b02a20; }
+    .b-skipped  { background: #f1f2f4; color: #6a7280; }
+    .b-error    { background: #fdecea; color: #b02a20; }
+    .b-pending  { background: #f1f2f4; color: #9aa2ad; }
+    .dir-msg { color: #6a7280; font-size: 12px; }
+    .download-btn {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 12px 18px;
+      background: #1c9e58;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+    .download-btn:hover { background: #178049; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Business Directory Scraper</h1>
+    <p class="sub">
+      Searches every ticked directory, removes duplicates, and exports every
+      business it finds &mdash; name, phone, website, address, category and
+      description &mdash; whether or not an email is available. Runs are
+      deliberately slow (human-pace delays) &mdash; expect several minutes.
+    </p>
+
+    <label for="keyword">Keyword (category / service)</label>
+    <input type="text" id="keyword" placeholder="e.g. Plumbers">
+
+    <label for="location">Location (worldwide)</label>
+    <input type="text" id="location" placeholder="e.g. Denver, CO &mdash; or London, or Sydney">
+
+    <label>Directories</label>
+    <div class="dir-grid">
+      {% for d in directories %}
+      <label class="dir-item">
+        <input type="checkbox" name="directories" value="{{ d.key }}" {% if d.default_on %}checked{% endif %}>
+        <span>
+          {{ d.label }}
+          {% if d.tos_note %}<span class="note">{{ d.tos_note }}</span>{% endif %}
+        </span>
+      </label>
+      {% endfor %}
+    </div>
+
+    <label class="dir-item opt-item">
+      <input type="checkbox" id="find-emails">
+      <span>
+        Also look for emails on each business website
+        <span class="note">Much slower &mdash; opens every website and its
+        contact page. Leave off for SMS lists; emails published by the
+        directories themselves are collected either way.</span>
+      </span>
+    </label>
+
+    <button id="start-btn" onclick="startScrape()">Start Scraping</button>
+
+    <div id="status-area"></div>
+  </div>
+
+  <script>
+    let pollTimer = null;
+
+    const BADGES = {
+      pending:        ['b-pending', 'Waiting'],
+      running:        ['b-running', 'Running'],
+      ok:             ['b-ok', 'Done'],
+      blocked:        ['b-blocked', 'Blocked'],
+      skipped_robots: ['b-skipped', 'Skipped (robots.txt)'],
+      out_of_region:  ['b-skipped', 'Out of region'],
+      error:          ['b-error', 'Error'],
+    };
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g,
+        c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function setStatus(html) {
+      const area = document.getElementById('status-area');
+      area.classList.add('visible');
+      area.innerHTML = html;
+    }
+
+    function directoryTable(dirs, finished) {
+      let rows = dirs.map(d => {
+        const [cls, text] = BADGES[d.status] || ['b-pending', d.status];
+        return `<tr>
+          <td>${esc(d.label)}</td>
+          <td><span class="badge ${cls}">${esc(text)}</span></td>
+          <td>${d.found}</td><td>${d.kept}</td><td>${d.no_email}</td>
+          <td>${d.duplicates}</td><td>${d.failed_pages}</td>
+        </tr>
+        <tr><td colspan="7" class="dir-msg">${esc(finished ? d.note : (d.message || d.note))}</td></tr>`;
+      }).join('');
+      return `<table class="summary">
+        <tr><th>Directory</th><th>Status</th><th>Found</th><th>Exported</th>
+            <th>No email</th><th>Duplicates</th><th>Failed</th></tr>
+        ${rows}</table>`;
+    }
+
+    async function startScrape() {
+      const keyword = document.getElementById('keyword').value.trim();
+      const location = document.getElementById('location').value.trim();
+      const ticked = [...document.querySelectorAll('input[name="directories"]:checked')]
+        .map(el => el.value);
+      const btn = document.getElementById('start-btn');
+
+      if (!keyword || !location) {
+        setStatus('<span class="error">Please enter both a keyword and a location.</span>');
+        return;
+      }
+      if (ticked.length === 0) {
+        setStatus('<span class="error">Please tick at least one directory.</span>');
+        return;
+      }
+
+      btn.disabled = true;
+      setStatus('<span class="spinner"></span> Starting...');
+
+      const form = new FormData();
+      form.append('keyword', keyword);
+      form.append('location', location);
+      ticked.forEach(d => form.append('directories', d));
+      form.append('find_emails', document.getElementById('find-emails').checked ? '1' : '0');
+
+      let res;
+      try {
+        res = await fetch('/start', { method: 'POST', body: form });
+      } catch (e) {
+        setStatus('<span class="error">Could not reach the server.</span>');
+        btn.disabled = false;
+        return;
+      }
+
+      const data = await res.json();
+      if (data.error) {
+        setStatus('<span class="error">' + esc(data.error) + '</span>');
+        btn.disabled = false;
+        return;
+      }
+      pollProgress(data.job_id);
+    }
+
+    function pollProgress(jobId) {
+      pollTimer = setInterval(async () => {
+        let job;
+        try {
+          const res = await fetch('/progress/' + jobId);
+          job = await res.json();
+        } catch (e) {
+          return; // transient; try again next tick
+        }
+
+        if (job.done) {
+          clearInterval(pollTimer);
+          document.getElementById('start-btn').disabled = false;
+
+          if (job.error) {
+            setStatus('<span class="error">' + esc(job.message) + '</span>'
+              + directoryTable(job.directories || [], true));
+          } else {
+            let html = '&#10003; ' + esc(job.message)
+              + directoryTable(job.directories || [], true);
+            if (job.filename) {
+              html += '<br><a class="download-btn" href="/download/'
+                + encodeURIComponent(job.filename) + '">Download Excel File</a>';
+            }
+            setStatus(html);
+          }
+        } else {
+          setStatus('<span class="spinner"></span> ' + esc(job.message)
+            + directoryTable(job.directories || [], false));
+        }
+      }, 1000);
+    }
+  </script>
+</body>
+</html>
